@@ -1,12 +1,16 @@
 package com.yahoo.apps.instagram;
 
 import android.app.Activity;
+import android.media.Image;
 import android.os.Bundle;
+import android.support.v4.widget.SwipeRefreshLayout;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.ListView;
 
+import com.activeandroid.ActiveAndroid;
+import com.activeandroid.query.Delete;
 import com.loopj.android.http.AsyncHttpClient;
 import com.loopj.android.http.AsyncHttpRequest;
 import com.loopj.android.http.JsonHttpResponseHandler;
@@ -17,6 +21,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.List;
 
 
 public class MainActivity extends Activity {
@@ -24,6 +29,8 @@ public class MainActivity extends Activity {
     public static final String URL = "https://api.instagram.com/v1/media/popular?client_id=";
     private ArrayList<ImageData> photos;
     private ImageAdapter photosAdapter;
+    private SwipeRefreshLayout swipeContainer;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -32,7 +39,22 @@ public class MainActivity extends Activity {
         photosAdapter = new ImageAdapter(this, photos);
         ListView lvPhotos = (ListView)findViewById(R.id.lvPhotos);
         lvPhotos.setAdapter(photosAdapter);
-        queryImages();
+        onLoad();
+        swipeContainer = (SwipeRefreshLayout) findViewById(R.id.swipeContainer);
+        // Setup refresh listener which triggers new data loading
+        swipeContainer.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+            @Override
+            public void onRefresh() {
+                queryImages();
+                swipeContainer.setRefreshing(false);
+            }
+        });
+        // Configure the refreshing colors
+        swipeContainer.setColorSchemeResources(android.R.color.holo_blue_bright,
+                android.R.color.holo_green_light,
+                android.R.color.holo_orange_light,
+                android.R.color.holo_red_light);
+
 
     }
 
@@ -59,6 +81,16 @@ public class MainActivity extends Activity {
         return super.onOptionsItemSelected(item);
     }
 
+    public void onLoad(){
+        List<ImageData> imageDataList = ImageData.getAll();
+        if(imageDataList!=null && imageDataList.size()>0){
+            photos.addAll(imageDataList);
+            photosAdapter.notifyDataSetChanged();
+        }else {
+            queryImages();
+        }
+    }
+
     public void queryImages(){
         String url = URL + CLIENT_ID;
         AsyncHttpClient asyncHttpClient = new AsyncHttpClient();
@@ -77,13 +109,15 @@ public class MainActivity extends Activity {
                         imageData.imageHeight = photoJson.getJSONObject("images").getJSONObject("standard_resolution").getInt("height");
                         imageData.likesCount = photoJson.getJSONObject("likes").getInt("count");
                         imageData.userProfileImageUrl = photoJson.getJSONObject("user").getString("profile_picture");
-                        imageData.id = photoJson.getString("id");
+                        imageData.postId = photoJson.getString("id");
                         photos.add(imageData);
                     }
                 }catch (JSONException e){
                     Log.d("Error", e.getMessage());
                 }
+                photosAdapter.clear();
                 photosAdapter.notifyDataSetChanged();
+                clearCachedAndBulkSaveIntoDatabase(photos);
             }
 
             @Override
@@ -91,6 +125,16 @@ public class MainActivity extends Activity {
                 Log.d("Error", responseString);
             }
         });
+    }
+
+    public void clearCachedAndBulkSaveIntoDatabase(List<ImageData> imageDataList){
+        new Delete().from(ImageData.class).execute();
+        ActiveAndroid.beginTransaction();
+        for (ImageData imageData : imageDataList) {
+            imageData.save();
+        }
+        ActiveAndroid.setTransactionSuccessful();
+        ActiveAndroid.endTransaction();
     }
 }
 
