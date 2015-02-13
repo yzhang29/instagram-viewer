@@ -45,6 +45,7 @@ public class MainActivity extends Activity {
         swipeContainer.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
             @Override
             public void onRefresh() {
+                photosAdapter.clear();
                 queryImages();
                 swipeContainer.setRefreshing(false);
             }
@@ -104,7 +105,7 @@ public class MainActivity extends Activity {
                         JSONObject photoJson = jsonArray.getJSONObject(i);
                         ImageData imageData = new ImageData();
                         imageData.username = photoJson.getJSONObject("user").getString("username");
-                        imageData.caption = photoJson.getJSONObject("caption").getString("text");
+                        imageData.caption = photoJson.isNull("caption")?"":photoJson.getJSONObject("caption").getString("text");
                         imageData.imageUrl = photoJson.getJSONObject("images").getJSONObject("standard_resolution").getString("url");
                         imageData.imageHeight = photoJson.getJSONObject("images").getJSONObject("standard_resolution").getInt("height");
                         imageData.likesCount = photoJson.getJSONObject("likes").getInt("count");
@@ -115,7 +116,6 @@ public class MainActivity extends Activity {
                 }catch (JSONException e){
                     Log.d("Error", e.getMessage());
                 }
-                photosAdapter.clear();
                 photosAdapter.notifyDataSetChanged();
                 clearCachedAndBulkSaveIntoDatabase(photos);
             }
